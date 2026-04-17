@@ -131,6 +131,25 @@ Bu proje `.github/workflows/ios_build.yml` ile iOS için IPA oluşturma yeteneğ
 
 ## 📝 Kod ve Özellik Özetleri
 
+## 📣 v1.0.0.3 Güncelleme Notu
+
+Bu sürümde çoklu dil kapsamı genişletilmiş, sosyal platform giriş metinleri tamamlanmış ve iOS CI hattı güncellenmiştir.
+
+- Çeviri kapsamı genişletildi:
+	- `yourInfo`, `qrErrorCorrectionLevel`, `shareQR`, `saveQR` gibi eksik kalan anahtarlar 14 dilde tamamlandı.
+	- Arapça özelinde eksik olan `glassMode`, `linkToolsTitle`, `encryptToolsTitle` ve ilgili alt metinler düzeltildi.
+- Tüm sosyal uygulamalar için giriş istemleri tamamlandı:
+	- WhatsApp, SMS, Telegram, Signal, Viber, WeChat, LINE, Messenger, Discord, Instagram, X, Snapchat, YouTube, TikTok, Twitch, Facebook, Kick ve LinkedIn alan metinleri çoklu dil desteğine alındı.
+- UI metin tutarlılığı artırıldı:
+	- Ayarlar, ana ekran ve araç sekmelerindeki yeni başlıklar/etiketler diller arasında eşitlendi.
+- CI iyileştirmesi:
+	- iOS GitHub Actions workflow dosyasında deprecated `actions/upload-artifact@v3` kullanımı kaldırılarak `@v4` sürümüne geçirildi.
+	- Release adımları modern action yapısına taşındı.
+
+Sürüm bilgisi:
+
+- Uygulama sürümü: v1.0.0.3
+
 ## 📣 v1.0.0.2 Güncelleme Notu
 
 GitHub deposu: https://github.com/mehmetgokdeniz/fastgokdeniz
