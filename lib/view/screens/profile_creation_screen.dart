@@ -86,6 +86,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _takePhoto() async {
     if (kIsWeb) {
       if (mounted) {

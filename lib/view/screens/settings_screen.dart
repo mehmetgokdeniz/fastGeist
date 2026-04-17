@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
+import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/localization/app_strings.dart';
@@ -121,12 +122,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildThemeChoice({
+    required ThemeProvider themeProvider,
+    required String value,
+    required String label,
+    required IconData icon,
+    required Color activeColor,
+  }) {
+    final selected = themeProvider.themeMode == value;
+    final tile = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: selected
+            ? activeColor.withValues(alpha: 0.18)
+            : Theme.of(context).cardColor.withValues(alpha: 0.65),
+        border: Border.all(
+          color: selected
+              ? activeColor
+              : Theme.of(context).dividerColor.withValues(alpha: 0.65),
+          width: selected ? 1.5 : 1,
+        ),
+        boxShadow: [
+          if (themeProvider.isGlassMode && selected)
+            BoxShadow(
+              color: activeColor.withValues(alpha: 0.20),
+              blurRadius: 16,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
+            ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              color: selected
+                  ? activeColor.withValues(alpha: 0.16)
+                  : Theme.of(context).cardColor.withValues(alpha: 0.38),
+              border: Border.all(
+                color: selected
+                    ? activeColor.withValues(alpha: 0.5)
+                    : Theme.of(context).dividerColor.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Center(child: Icon(icon, color: selected ? activeColor : null)),
+                Positioned(
+                  left: 3,
+                  right: 3,
+                  top: 2,
+                  height: 10,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(
+                            alpha: themeProvider.isGlassMode ? 0.34 : 0.20,
+                          ),
+                          Colors.white.withValues(alpha: 0.0),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? activeColor : null,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final themedTile = themeProvider.isGlassMode
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: tile,
+            ),
+          )
+        : tile;
+
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => themeProvider.setTheme(value),
+        child: themedTile,
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
         final language = themeProvider.language;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return PopScope(
           canPop: true,
@@ -136,10 +246,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               centerTitle: true,
               elevation: 0,
             ),
-            body: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: 80),
-                child: Column(
+            body: Stack(
+              children: [
+                _SettingsBackgroundPattern(
+                  isDark: isDark,
+                  isGlass: themeProvider.isGlassMode,
+                ),
+                SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 80),
+                    child: Column(
                   children: [
                     // Profil Bölümü
                     Center(
@@ -347,19 +463,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: Icon(
                         themeProvider.isDarkMode
                             ? Icons.dark_mode
+                            : themeProvider.isGlassMode
+                            ? Icons.blur_on_rounded
                             : Icons.light_mode,
                       ),
                       title: Text(AppStrings.get('theme', language)),
                       subtitle: Text(
                         themeProvider.isDarkMode
                             ? AppStrings.get('darkMode', language)
+                            : themeProvider.isGlassMode
+                            ? AppStrings.get('glassMode', language)
                             : AppStrings.get('lightMode', language),
                       ),
-                      trailing: Switch(
-                        value: themeProvider.isDarkMode,
-                        onChanged: (value) {
-                          themeProvider.setTheme(value ? 'dark' : 'light');
-                        },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          _buildThemeChoice(
+                            themeProvider: themeProvider,
+                            value: 'light',
+                            label: AppStrings.get('lightMode', language),
+                            icon: Icons.light_mode,
+                            activeColor: const Color(0xFFFF9F43),
+                          ),
+                          const SizedBox(width: 10),
+                          _buildThemeChoice(
+                            themeProvider: themeProvider,
+                            value: 'dark',
+                            label: AppStrings.get('darkMode', language),
+                            icon: Icons.dark_mode,
+                            activeColor: const Color(0xFF7367F0),
+                          ),
+                          const SizedBox(width: 10),
+                          _buildThemeChoice(
+                            themeProvider: themeProvider,
+                            value: 'glass',
+                            label: AppStrings.get('glassMode', language),
+                            icon: Icons.blur_on_rounded,
+                            activeColor: const Color(0xFF2D9CDB),
+                          ),
+                        ],
                       ),
                     ),
 
@@ -519,6 +663,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         Text(
                                           AppStrings.get('feature4', language),
                                         ),
+                                        Text(
+                                          AppStrings.get('feature5', language),
+                                        ),
+                                        Text(
+                                          AppStrings.get('feature6', language),
+                                        ),
+                                        Text(
+                                          AppStrings.get('feature7', language),
+                                        ),
+                                        Text(
+                                          AppStrings.get('feature8', language),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -568,6 +724,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    AppStrings.get('rightsDesc', language),
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
                                     ),
                                   ),
                                   const SizedBox(height: 16),
@@ -640,9 +803,181 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+}
+
+class _SettingsBackgroundPattern extends StatelessWidget {
+  const _SettingsBackgroundPattern({
+    required this.isDark,
+    required this.isGlass,
+  });
+
+  final bool isDark;
+  final bool isGlass;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    if (isGlass) {
+      // Glass mode: minimalist gradient with subtle accents
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF8DDDF4),
+              Color(0xFF9DD5E6),
+              Color(0xFFA8CACE),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Subtle circular accent top-right
+            Positioned(
+              top: -80,
+              right: -60,
+              child: Container(
+                width: 280,
+                height: 280,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF5BA3D0).withValues(alpha: 0.28),
+                      const Color(0xFF5BA3D0).withValues(alpha: 0.08),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Subtle linear accent bottom-left
+            Positioned(
+              bottom: -100,
+              left: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF7AC9E8).withValues(alpha: 0.22),
+                      const Color(0xFF7AC9E8).withValues(alpha: 0.04),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Diagonal accent line
+            Positioned(
+              top: 120,
+              right: -40,
+              child: Transform.rotate(
+                angle: 0.5,
+                child: Container(
+                  width: 2,
+                  height: 240,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0),
+                        Colors.white.withValues(alpha: 0.15),
+                        Colors.white.withValues(alpha: 0),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Normal mode: gradient + dot pattern
+    final gradientColors = isDark
+        ? const [Color(0xFF0C0D14), Color(0xFF15161F), Color(0xFF0D0E15)]
+        : [
+            const Color(0xFFFAFBFE),
+            const Color(0xFFF3F5FF),
+            const Color(0xFFEEF1FF),
+          ];
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: CustomPaint(
+        painter: _SettingsDotPatternPainter(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06),
+          isDark: isDark,
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _SettingsDotPatternPainter extends CustomPainter {
+  _SettingsDotPatternPainter({
+    required this.color,
+    required this.isDark,
+  });
+
+  final Color color;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    const step = 28.0;
+    const dotRadius = 1.2;
+
+    for (double x = 0; x <= size.width; x += step) {
+      for (double y = 0; y <= size.height; y += step) {
+        // Offset every other row for staggered pattern
+        final offsetX = (y / step).toInt() % 2 == 0 ? 0.0 : step / 2;
+        canvas.drawCircle(Offset(x + offsetX, y), dotRadius, paint);
+      }
+    }
+
+    // Add subtle gradient overlay lines
+    if (isDark) {
+      final linePaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.04)
+        ..strokeWidth = 0.5;
+
+      // Horizontal lines
+      for (double y = 0; y <= size.height; y += 80) {
+        canvas.drawLine(
+          Offset(0, y),
+          Offset(size.width, y),
+          linePaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

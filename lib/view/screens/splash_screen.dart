@@ -519,18 +519,25 @@ class _SplashLogo extends StatelessWidget {
           ),
           Center(
             child: Container(
-              width: 96,
-              height: 96,
+              width: 102,
+              height: 102,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withOpacity(0.15)),
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: Colors.white.withOpacity(0.10)),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Image.asset(
-                  'assets/icon/app_icon.png',
-                  fit: BoxFit.cover,
+                borderRadius: BorderRadius.circular(26),
+                child: OverflowBox(
+                  maxWidth: 124,
+                  maxHeight: 124,
+                  child: Transform.scale(
+                    scale: 1.18,
+                    child: Image.asset(
+                      'assets/icon/app_icon.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
               ),
             ),

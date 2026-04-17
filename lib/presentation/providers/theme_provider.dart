@@ -3,10 +3,12 @@ import '../../data/services/app_storage_service.dart';
 
 class ThemeProvider with ChangeNotifier {
   final AppStorageService _storageService = AppStorageService();
-  
-  String _themeMode = 'dark'; // 'light' or 'dark'
+
+  String _themeMode = 'dark'; // 'light', 'dark', or 'glass'
   String _language = 'tr'; // 'tr' or 'en'
   bool _isInitialized = false;
+
+  static const Set<String> _supportedThemes = {'light', 'dark', 'glass'};
 
   String get themeMode => _themeMode;
   String get language => _language;
@@ -18,7 +20,7 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> _loadThemeAndLanguage() async {
     try {
-      _themeMode = await _storageService.getTheme();
+      _themeMode = _normalizeTheme(await _storageService.getTheme());
       _language = await _storageService.getLanguage();
       _isInitialized = true;
       notifyListeners();
@@ -30,8 +32,9 @@ class ThemeProvider with ChangeNotifier {
   }
 
   Future<void> setTheme(String theme) async {
-    _themeMode = theme;
-    await _storageService.setTheme(theme);
+    final normalized = _normalizeTheme(theme);
+    _themeMode = normalized;
+    await _storageService.setTheme(normalized);
     notifyListeners();
   }
 
@@ -42,4 +45,13 @@ class ThemeProvider with ChangeNotifier {
   }
 
   bool get isDarkMode => _themeMode == 'dark';
+  bool get isLightMode => _themeMode == 'light';
+  bool get isGlassMode => _themeMode == 'glass';
+
+  String _normalizeTheme(String theme) {
+    if (_supportedThemes.contains(theme)) {
+      return theme;
+    }
+    return 'dark';
+  }
 }

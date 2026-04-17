@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +20,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+  with SingleTickerProviderStateMixin {
   final AppStorageService _storageService = AppStorageService();
   final TextEditingController _chatController = TextEditingController();
   final TextEditingController _socialController = TextEditingController();
@@ -31,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedChatIndex = 0;
   int _selectedToolIndex = 0;
   String _selectedCountryIso = 'TR';
+  late final AnimationController _glassGlowController;
 
   static final RegExp _historyPrefixPattern = RegExp(
     r'^(WA:|SMS:|TG:|Signal:|Viber:|LINE:|Messenger:|Discord:|Instagram:|X:|Snapchat:|YouTube:|TikTok:|Twitch:|Facebook:|Kick:|LinkedIn:|Email: )',
@@ -94,21 +97,34 @@ class _HomeScreenState extends State<HomeScreen> {
       AppStrings.get(key, context.read<ThemeProvider>().language);
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
-    Color get _panelColor => Theme.of(context).cardColor;
-    Color get _panelBorderColor => Theme.of(context).dividerColor;
-    Color get _fieldFillColor =>
+  bool get _isGlassMode => context.read<ThemeProvider>().isGlassMode;
+  Color get _panelColor => Theme.of(context).cardColor;
+  Color get _panelBorderColor => Theme.of(context).dividerColor;
+  Color get _fieldFillColor =>
       Theme.of(context).inputDecorationTheme.fillColor ??
       (_isDark ? const Color(0xFF1B1B22) : const Color(0xFFF6F7FB));
+
+  Widget _maybeGlassPanel({required Widget child, required double radius}) {
+    if (!_isGlassMode) {
+      return child;
+    }
+    return _BlurGlassPanel(radius: radius, child: child);
+  }
 
   @override
   void initState() {
     super.initState();
+    _glassGlowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
     _seedFuture = _loadSeedData();
     _primeControllers();
   }
 
   @override
   void dispose() {
+    _glassGlowController.dispose();
     _chatController.dispose();
     _socialController.dispose();
     _toolController.dispose();
@@ -141,11 +157,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _chatController.text = seed.phone?.trim().isNotEmpty == true
           ? seed.phone!.trim()
-          : (recentPhone.isNotEmpty ? recentPhone.first : '05521270516');
+        : (recentPhone.isNotEmpty ? recentPhone.first : '');
 
       _socialController.text = seed.email?.trim().isNotEmpty == true
           ? seed.email!.split('@').first
-          : 'mehmetgokdeniz';
+        : '';
 
       _toolController.text = seed.email?.trim().isNotEmpty == true
           ? seed.email!.trim()
@@ -465,37 +481,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     switch (action) {
       case 'telegram':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'signal':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'viber':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'wechat':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'line':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'messenger':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'discord':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'instagram':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'x':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'snapchat':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'youtube':
-        return '$title • -@mehmetgokdenizChannel';
+        return '$title • -@channelName';
       case 'tiktok':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'twitch':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'facebook':
-        return '$title • -mehmet.gokdeniz';
+        return '$title • -profile.name';
       case 'kick':
-        return '$title • -@mehmetgokdeniz';
+        return '$title • -@username';
       case 'linkedin':
-        return '$title • -/in/mehmet-gokdeniz';
+        return '$title • -/in/username';
       case 'email':
         return '$title • -mehmet@example.com';
       default:
@@ -862,7 +878,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     Uri? uri = Uri.tryParse(trimmed);
-    if (uri == null) {
+    if (uri == null || !uri.hasScheme) {
       final normalized =
           trimmed.startsWith('http://') || trimmed.startsWith('https://')
           ? trimmed
@@ -947,7 +963,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return Scaffold(
           body: Stack(
             children: [
-              _BackgroundPattern(isDark: _isDark),
+              _BackgroundPattern(
+                isDark: _isDark,
+                isGlass: context.watch<ThemeProvider>().isGlassMode,
+              ),
               SafeArea(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
@@ -1007,7 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           child: Transform.scale(
-            scale: 1.15,
+            scale: 1.28,
             child: ClipOval(
               child: Image.asset(
                 'assets/icon/app_icon.png',
@@ -1251,60 +1270,67 @@ class _HomeScreenState extends State<HomeScreen> {
       (_t('tools'), Icons.handyman_rounded),
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: _panelColor,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _panelBorderColor),
-      ),
-      child: Row(
-        children: List.generate(tabs.length, (index) {
-          final selected = _selectedTab == index;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedTab = index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    gradient: selected
-                        ? const LinearGradient(
-                            colors: [Color(0xFF7F77FF), Color(0xFFB46CFF)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : null,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        tabs[index].$2,
-                        color: selected
-                            ? Colors.white
-                            : (_isDark ? Colors.white60 : Colors.black54),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        tabs[index].$1,
-                        style: TextStyle(
+    return _maybeGlassPanel(
+      radius: 28,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: _isGlassMode ? Colors.white.withValues(alpha: 0.22) : _panelColor,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: _isGlassMode
+                ? Colors.white.withValues(alpha: 0.36)
+                : _panelBorderColor,
+          ),
+        ),
+        child: Row(
+          children: List.generate(tabs.length, (index) {
+            final selected = _selectedTab == index;
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedTab = index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      gradient: selected
+                          ? const LinearGradient(
+                              colors: [Color(0xFF7F77FF), Color(0xFFB46CFF)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          tabs[index].$2,
                           color: selected
                               ? Colors.white
-                              : (_isDark ? Colors.white70 : Colors.black54),
-                          fontWeight: FontWeight.w600,
+                              : (_isDark ? Colors.white60 : Colors.black54),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          tabs[index].$1,
+                          style: TextStyle(
+                            color: selected
+                                ? Colors.white
+                                : (_isDark ? Colors.white70 : Colors.black54),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -1445,7 +1471,7 @@ class _HomeScreenState extends State<HomeScreen> {
           controller: _chatController,
           icon: items[_selectedChatIndex].icon,
           iconColor: items[_selectedChatIndex].color,
-          buttonGradient: const [Color(0xFF5A66FF), Color(0xFF6D9CFF)],
+          actionKey: items[_selectedChatIndex].actionKey,
           buttonText: '${_t('open')} ${items[_selectedChatIndex].title}',
           onPressed: () =>
               _handleChatAction(items[_selectedChatIndex].actionKey),
@@ -1640,7 +1666,7 @@ class _HomeScreenState extends State<HomeScreen> {
           controller: _socialController,
           icon: items[_selectedSocialIndex].icon,
           iconColor: items[_selectedSocialIndex].color,
-          buttonGradient: const [Color(0xFF5A66FF), Color(0xFF8D6DFF)],
+          actionKey: items[_selectedSocialIndex].actionKey,
           buttonText: '${_t('open')} ${items[_selectedSocialIndex].title}',
           onPressed: () =>
               _handleSocialAction(items[_selectedSocialIndex].actionKey),
@@ -1703,194 +1729,316 @@ class _HomeScreenState extends State<HomeScreen> {
     required void Function(_ShortcutItem item, int index) onTap,
     bool compact = false,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: _isDark ? const Color(0xFF17171E) : const Color(0xFFF4F6FD),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: _isDark ? const Color(0xFF2F2F3D) : const Color(0xFFD6DBEA),
+    return _maybeGlassPanel(
+      radius: 28,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: _isGlassMode
+              ? Colors.white.withValues(alpha: 0.20)
+              : (_isDark ? const Color(0xFF17171E) : const Color(0xFFF4F6FD)),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: _isGlassMode
+                ? Colors.white.withValues(alpha: 0.34)
+                : (_isDark
+                      ? const Color(0xFF2F2F3D)
+                      : const Color(0xFFD6DBEA)),
+          ),
         ),
-      ),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: items.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          mainAxisSpacing: compact ? 8 : 10,
-          crossAxisSpacing: compact ? 8 : 10,
-          childAspectRatio: compact ? 1.08 : 1.04,
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: compact ? 8 : 10,
+            crossAxisSpacing: compact ? 8 : 10,
+            childAspectRatio: compact ? 1.08 : 1.04,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _ShortcutTile(
+              item: item,
+              compact: compact,
+              isDark: _isDark,
+              isGlass: _isGlassMode,
+              glowAnimation: _glassGlowController,
+              onTap: () => onTap(item, index),
+            );
+          },
         ),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return _ShortcutTile(
-            item: item,
-            compact: compact,
-            isDark: _isDark,
-            onTap: () => onTap(item, index),
-          );
-        },
       ),
     );
+  }
+
+  List<Color> _openButtonGradientForAction(String actionKey, Color fallback) {
+    switch (actionKey) {
+      case 'whatsapp':
+        return const [Color(0xFF25D366), Color(0xFF128C7E)];
+      case 'sms':
+        return const [Color(0xFFF59E0B), Color(0xFFFBBF24)];
+      case 'telegram':
+        return const [Color(0xFF2AABEE), Color(0xFF229ED9)];
+      case 'signal':
+        return const [Color(0xFF3A76F0), Color(0xFF1B53CC)];
+      case 'viber':
+        return const [Color(0xFF7360F2), Color(0xFF5E4AD0)];
+      case 'line':
+        return const [Color(0xFF06C755), Color(0xFF11A949)];
+      case 'messenger':
+        return const [Color(0xFF00B2FF), Color(0xFF0084FF)];
+      case 'discord':
+        return const [Color(0xFF5865F2), Color(0xFF7983FF)];
+      case 'instagram':
+        return const [Color(0xFFF58529), Color(0xFFDD2A7B)];
+      case 'x':
+        return const [Color(0xFF111111), Color(0xFF2F2F2F)];
+      case 'snapchat':
+        return const [Color(0xFFFFFC00), Color(0xFFF2D600)];
+      case 'youtube':
+        return const [Color(0xFFFF0000), Color(0xFFFF4A4A)];
+      case 'tiktok':
+        return const [Color(0xFF00F2EA), Color(0xFFFF0050)];
+      case 'twitch':
+        return const [Color(0xFF9146FF), Color(0xFF772CE8)];
+      case 'facebook':
+        return const [Color(0xFF1877F2), Color(0xFF0D5CC6)];
+      case 'kick':
+        return const [Color(0xFF7CFF2F), Color(0xFF3FCB2E)];
+      case 'linkedin':
+        return const [Color(0xFF0A66C2), Color(0xFF004182)];
+      default:
+        return [fallback, fallback.withValues(alpha: 0.82)];
+    }
+  }
+
+  _OpenButtonMotion _openButtonMotionForAction(String actionKey) {
+    return _OpenButtonMotion.bounce;
+  }
+
+  Color _openButtonForegroundForAction(String actionKey) {
+    switch (actionKey) {
+      case 'snapchat':
+      case 'kick':
+        return const Color(0xFF101114);
+      default:
+        return Colors.white;
+    }
   }
 
   Widget _buildActionComposer({
     required TextEditingController controller,
     required IconData icon,
     required Color iconColor,
-    required List<Color> buttonGradient,
+    required String actionKey,
     required String buttonText,
     required VoidCallback onPressed,
     required String hintText,
     String? watermarkText,
     required TextInputType keyboardType,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _isDark ? const Color(0xFF17171E) : const Color(0xFFF4F6FD),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: _isDark ? const Color(0xFF2F2F3D) : const Color(0xFFD6DBEA),
+    return _maybeGlassPanel(
+      radius: 28,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _isGlassMode
+              ? Colors.white.withValues(alpha: 0.20)
+              : (_isDark ? const Color(0xFF17171E) : const Color(0xFFF4F6FD)),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: _isGlassMode
+                ? Colors.white.withValues(alpha: 0.34)
+                : (_isDark
+                    ? const Color(0xFF2F2F3D)
+                    : const Color(0xFFD6DBEA)),
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          if (watermarkText != null && watermarkText.trim().isNotEmpty) ...[
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _isDark
-                      ? [const Color(0xFF2A3A5C), const Color(0xFF1F2A4A)]
-                      : [const Color(0xFFE3EAFF), const Color(0xFFD6E5FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _isDark
-                      ? const Color(0xFF6D7BFF).withValues(alpha: 0.4)
-                      : const Color(0xFF6D7BFF).withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6D7BFF).withValues(alpha: 0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+        child: Column(
+          children: [
+            if (watermarkText != null && watermarkText.trim().isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _isDark
+                        ? [const Color(0xFF2A3A5C), const Color(0xFF1F2A4A)]
+                        : [const Color(0xFFE3EAFF), const Color(0xFFD6E5FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _isDark
+                        ? const Color(0xFF6D7BFF).withValues(alpha: 0.4)
+                        : const Color(0xFF6D7BFF).withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6D7BFF).withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6D7BFF).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.verified_user_rounded,
+                        size: 16,
+                        color: Color(0xFF6D7BFF),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        watermarkText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _isDark ? Colors.white : const Color(0xFF1A1F3A),
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: _isGlassMode
+                    ? Colors.white.withValues(alpha: 0.36)
+                    : (_isDark ? const Color(0xFF21212A) : Colors.white),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6D7BFF).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(
-                      Icons.verified_user_rounded,
-                      size: 16,
-                      color: Color(0xFF6D7BFF),
+                  Icon(icon, color: iconColor, size: 24),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: hintText,
+                        hintStyle: TextStyle(
+                          color: _isDark ? Colors.white54 : Colors.black45,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                      keyboardType: keyboardType,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      watermarkText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _isDark ? Colors.white : const Color(0xFF1A1F3A),
-                        fontWeight: FontWeight.w600,
-                        height: 1.3,
-                        letterSpacing: 0.2,
-                      ),
+                  IconButton(
+                    onPressed: () => _pasteClipboard(controller),
+                    icon: Icon(
+                      Icons.content_paste_rounded,
+                      color: _isDark ? Colors.white70 : Colors.black54,
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: _isDark ? const Color(0xFF21212A) : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: iconColor, size: 24),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: hintText,
-                      hintStyle: TextStyle(
-                        color: _isDark ? Colors.white54 : Colors.black45,
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 58,
+              child: AnimatedBuilder(
+                animation: _glassGlowController,
+                builder: (context, _) {
+                  final motion = _openButtonMotionForAction(actionKey);
+                  final foreground = _openButtonForegroundForAction(actionKey);
+                  final gradient = _openButtonGradientForAction(actionKey, iconColor);
+                  final wave = _glassGlowController.value <= 0.5
+                      ? _glassGlowController.value * 2
+                      : (1 - _glassGlowController.value) * 2;
+
+                  double scale = 1;
+                  double dy = 0;
+                  double turn = 0;
+
+                  switch (motion) {
+                    case _OpenButtonMotion.pulse:
+                      scale = 1 + (0.07 * wave);
+                      break;
+                    case _OpenButtonMotion.bounce:
+                      dy = -3.2 * wave;
+                      break;
+                    case _OpenButtonMotion.swing:
+                      turn = (wave - 0.5) * 0.12;
+                      break;
+                  }
+
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: gradient,
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
                       ),
-                      border: InputBorder.none,
-                      isDense: true,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: gradient.first.withValues(alpha: 0.32),
+                          blurRadius: 16 + (10 * wave),
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                    keyboardType: keyboardType,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => _pasteClipboard(controller),
-                  icon: Icon(
-                    Icons.content_paste_rounded,
-                    color: _isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 58,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: buttonGradient,
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: ElevatedButton.icon(
-                onPressed: onPressed,
-                icon: Icon(icon, color: Colors.white),
-                label: Text(
-                  buttonText,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
+                    child: ElevatedButton.icon(
+                      onPressed: onPressed,
+                      icon: Transform.translate(
+                        offset: Offset(0, dy),
+                        child: Transform.rotate(
+                          angle: turn,
+                          child: Transform.scale(
+                            scale: scale,
+                            child: Icon(icon, color: foreground),
+                          ),
+                        ),
+                      ),
+                      label: Text(
+                        buttonText,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: foreground,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: foreground,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1926,13 +2074,54 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _BackgroundPattern extends StatelessWidget {
-  const _BackgroundPattern({required this.isDark});
+  const _BackgroundPattern({required this.isDark, required this.isGlass});
 
   final bool isDark;
+  final bool isGlass;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (isGlass) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF7FCFE6), Color(0xFF9EC3F2), Color(0xFF8ADDEB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -30,
+              right: -20,
+              child: _GlassCircle(
+                size: 220,
+                color: const Color(0xFF468AE1).withValues(alpha: 0.35),
+              ),
+            ),
+            Positioned(
+              bottom: -46,
+              left: -20,
+              child: _GlassCircle(
+                size: 250,
+                color: const Color(0xFFA6EEFF).withValues(alpha: 0.34),
+              ),
+            ),
+            Positioned(
+              top: 170,
+              left: 24,
+              child: _GlassCircle(
+                size: 120,
+                color: Colors.white.withValues(alpha: 0.25),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final gradientColors = isDark
         ? const [Color(0xFF0C0D14), Color(0xFF101420), Color(0xFF0C0D14)]
         : [
@@ -1983,107 +2172,204 @@ class _GridPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+class _GlassCircle extends StatelessWidget {
+  const _GlassCircle({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+      ),
+    );
+  }
+}
+
 class _ShortcutTile extends StatelessWidget {
   const _ShortcutTile({
     required this.item,
     required this.onTap,
     required this.compact,
     required this.isDark,
+    required this.isGlass,
+    required this.glowAnimation,
   });
 
   final _ShortcutItem item;
   final VoidCallback onTap;
   final bool compact;
   final bool isDark;
+  final bool isGlass;
+  final Animation<double> glowAnimation;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: item.active
-                ? item.color.withValues(alpha: 0.65)
-                : (isDark ? const Color(0xFF343444) : const Color(0xFFD8DDEA)),
-            width: item.active ? 1.4 : 1,
-          ),
-          color: item.active
-              ? item.color.withValues(alpha: 0.18)
-              : (isDark ? const Color(0xFF1C1C24) : Colors.white),
-          boxShadow: [
-            if (item.active)
-              BoxShadow(
-                color: item.color.withValues(alpha: 0.18),
-                blurRadius: 16,
-                offset: const Offset(0, 10),
-              ),
-          ],
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 6 : 8,
-          vertical: compact ? 8 : 10,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: compact ? 38 : 40,
-              height: compact ? 38 : 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(
-                  colors: [
-                    item.color.withValues(alpha: 0.85),
-                    item.color.withValues(alpha: 0.55),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Icon(
-                item.icon,
-                color: Colors.white,
-                size: compact ? 18 : 16,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              item.title,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
+    return AnimatedBuilder(
+      animation: glowAnimation,
+      builder: (context, _) {
+        final pulse = item.active && isGlass
+            ? 0.55 + (glowAnimation.value * 0.45)
+            : 0.0;
+        final shimmerProgress = glowAnimation.value;
+        final iconSpecularAlpha = isGlass
+            ? 0.22 + (0.18 * shimmerProgress)
+            : 0.16;
+
+        return GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
                 color: item.active
-                    ? Colors.white
-                    : (isDark ? Colors.white : Colors.black87),
-                fontWeight: FontWeight.w600,
-                height: 1.15,
+                    ? item.color.withValues(alpha: isGlass ? 0.72 : 0.65)
+                    : (isDark
+                          ? const Color(0xFF343444)
+                          : const Color(0xFFD8DDEA)),
+                width: item.active ? 1.4 : 1,
               ),
+              color: item.active
+                  ? item.color.withValues(alpha: isGlass ? 0.24 : 0.18)
+                  : (isGlass
+                        ? Colors.white.withValues(alpha: 0.18)
+                        : (isDark ? const Color(0xFF1C1C24) : Colors.white)),
+              boxShadow: [
+                if (item.active)
+                  BoxShadow(
+                    color: item.color.withValues(
+                      alpha: isGlass ? 0.16 + (0.16 * pulse) : 0.18,
+                    ),
+                    blurRadius: isGlass ? 14 + (12 * pulse) : 16,
+                    spreadRadius: isGlass ? 1.2 + (1.5 * pulse) : 0,
+                    offset: const Offset(0, 10),
+                  ),
+              ],
             ),
-          ],
-        ),
-      ),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 6 : 8,
+              vertical: compact ? 8 : 10,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: compact ? 38 : 40,
+                  height: compact ? 38 : 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      colors: [
+                        item.color.withValues(alpha: 0.85),
+                        item.color.withValues(alpha: 0.55),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Center(
+                        child: Icon(
+                          item.icon,
+                          color: Colors.white,
+                          size: compact ? 18 : 16,
+                        ),
+                      ),
+                      Positioned(
+                        left: 3,
+                        right: 3,
+                        top: 2,
+                        height: 11,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(alpha: iconSpecularAlpha),
+                                  Colors.white.withValues(alpha: 0.02),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 6 + ((compact ? 24.0 : 26.0) * shimmerProgress),
+                        top: 6,
+                        child: Transform.rotate(
+                          angle: 0.38,
+                          child: Container(
+                            width: 5,
+                            height: 21,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(
+                                    alpha: isGlass ? 0.22 : 0.14,
+                                  ),
+                                  Colors.white.withValues(alpha: 0.0),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: item.active
+                        ? Colors.white
+                        : (isDark ? Colors.white : Colors.black87),
+                    fontWeight: FontWeight.w600,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _HeroIcon extends StatelessWidget {
-  const _HeroIcon();
+class _BlurGlassPanel extends StatelessWidget {
+  const _BlurGlassPanel({required this.radius, required this.child});
+
+  final double radius;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: child,
       ),
-      child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 26),
     );
   }
 }
@@ -2150,6 +2436,8 @@ class _SheetResultCard extends StatelessWidget {
     );
   }
 }
+
+enum _OpenButtonMotion { pulse, bounce, swing }
 
 class _ShortcutItem {
   _ShortcutItem({

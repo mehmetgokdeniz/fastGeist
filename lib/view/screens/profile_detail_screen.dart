@@ -22,12 +22,21 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   bool _isEditing = false;
   Uint8List? _selectedImageBytes;
   final _imagePicker = ImagePicker();
+  bool _controllersInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _displayNameController = TextEditingController();
     _bioController = TextEditingController();
+  }
+
+  void _initializeControllers(UserProfile profile) {
+    if (!_controllersInitialized) {
+      _displayNameController.text = profile.displayName;
+      _bioController.text = profile.bio ?? '';
+      _controllersInitialized = true;
+    }
   }
 
   @override
@@ -104,6 +113,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     return FileImage(File(profile.profileImageUrl!));
   }
 
+  // ignore: unused_element
   Future<void> _showExpandedImage(ImageProvider imageProvider) async {
     await showDialog(
       context: context,
@@ -148,7 +158,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Profile updated!')),
+                      const SnackBar(content: Text('Profil güncellendi!')),
                     );
                   }
                 }
@@ -170,10 +180,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
             return const Center(child: Text('No profile found'));
           }
 
-          if (!_isEditing) {
-            _displayNameController.text = profile.displayName;
-            _bioController.text = profile.bio ?? '';
-          }
+          _initializeControllers(profile);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),

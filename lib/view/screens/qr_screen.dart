@@ -27,7 +27,8 @@ class QRScreen extends StatefulWidget {
   State<QRScreen> createState() => _QRScreenState();
 }
 
-class _QRScreenState extends State<QRScreen> {
+class _QRScreenState extends State<QRScreen>
+  with SingleTickerProviderStateMixin {
   late TextEditingController _urlController;
   final GlobalKey _qrImageKey = GlobalKey();
   final mlkit.BarcodeScanner _galleryBarcodeScanner = mlkit.BarcodeScanner(
@@ -58,6 +59,9 @@ class _QRScreenState extends State<QRScreen> {
   String? _lastScannedValue;
   bool _isHandlingLiveScan = false;
   bool _scannerShouldBeActive = false;
+  bool _isGalleryScanInProgress = false;
+  File? _galleryScanPreviewImage;
+  late final AnimationController _galleryScanAnimationController;
 
   final List<String> _qrStyles = const [
     'classic',
@@ -79,6 +83,17 @@ class _QRScreenState extends State<QRScreen> {
   ];
 
   String get _language => context.read<ThemeProvider>().language;
+    bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+    Color get _subtleTextColor => _isDarkMode ? Colors.white70 : Colors.black54;
+    Color get _mutedTextColor => _isDarkMode ? Colors.white60 : Colors.black45;
+    Color get _panelFillColor => _isDarkMode
+      ? const Color(0xFF23242C)
+      : Colors.white.withValues(alpha: 0.94);
+    Color get _chipBgColor =>
+      _isDarkMode ? const Color(0xFF2A2B35) : const Color(0xFFEFF2FF);
+    Color get _outlineColor =>
+      _isDarkMode ? const Color(0xFF393A44) : const Color(0xFFD6DBEA);
 
   String _t(String key) => AppStrings.get(key, _language);
 
@@ -154,6 +169,10 @@ class _QRScreenState extends State<QRScreen> {
   @override
   void initState() {
     super.initState();
+    _galleryScanAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
     _scannerController = MobileScannerController(
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
@@ -180,6 +199,7 @@ class _QRScreenState extends State<QRScreen> {
   void dispose() {
     _galleryBarcodeScanner.close();
     _scannerShouldBeActive = false;
+    _galleryScanAnimationController.dispose();
     try {
       _scannerController.stop();
     } catch (_) {
@@ -638,7 +658,17 @@ class _QRScreenState extends State<QRScreen> {
   }
 
   Future<void> _scanPickedGalleryImage(XFile pickedFile) async {
+    const minimumScanEffectDuration = Duration(milliseconds: 1700);
+    final startedAt = DateTime.now();
+
     try {
+      if (mounted) {
+        setState(() {
+          _galleryScanPreviewImage = File(pickedFile.path);
+          _isGalleryScanInProgress = true;
+        });
+      }
+
       final inputImage = mlkit.InputImage.fromFilePath(pickedFile.path);
       final barcodes = await _galleryBarcodeScanner.processImage(inputImage);
 
@@ -654,10 +684,19 @@ class _QRScreenState extends State<QRScreen> {
       if (!mounted) return;
 
       if (raw == null) {
+        final elapsed = DateTime.now().difference(startedAt);
+        if (elapsed < minimumScanEffectDuration) {
+          await Future.delayed(minimumScanEffectDuration - elapsed);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_t('qrUnreadable'))),
         );
         return;
+      }
+
+      final elapsed = DateTime.now().difference(startedAt);
+      if (elapsed < minimumScanEffectDuration) {
+        await Future.delayed(minimumScanEffectDuration - elapsed);
       }
 
       await _showScannedResult(raw);
@@ -666,6 +705,13 @@ class _QRScreenState extends State<QRScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${_t('error')} $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGalleryScanInProgress = false;
+          _galleryScanPreviewImage = null;
+        });
+      }
     }
   }
 
@@ -686,6 +732,137 @@ class _QRScreenState extends State<QRScreen> {
         SnackBar(content: Text('${_t('error')} $e')),
       );
     }
+  }
+
+  Widget _buildGalleryScanOverlay() {
+    return AnimatedBuilder(
+      animation: _galleryScanAnimationController,
+      builder: (context, _) {
+        final progress = _galleryScanAnimationController.value;
+
+        return Container(
+          color: Colors.black.withValues(alpha: 0.62),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final frameSize =
+                  (constraints.maxWidth < constraints.maxHeight
+                      ? constraints.maxWidth
+                      : constraints.maxHeight) *
+                  0.62;
+              final frameTop = (constraints.maxHeight - frameSize) / 2;
+              final scanTop = frameTop + (frameSize - 3) * progress;
+
+              return Stack(
+                children: [
+                  if (_galleryScanPreviewImage != null)
+                    Positioned(
+                      top: frameTop,
+                      left: (constraints.maxWidth - frameSize) / 2,
+                      child: Container(
+                        width: frameSize,
+                        height: frameSize,
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFFD8C3FF).withValues(alpha: 0.65),
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.file(
+                            _galleryScanPreviewImage!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    left: (constraints.maxWidth - frameSize) / 2,
+                    top: frameTop,
+                    child: Container(
+                      width: frameSize,
+                      height: frameSize,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFE7D9FF),
+                          width: 1.8,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFB68CFF).withValues(alpha: 0.2),
+                            blurRadius: 20,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: (constraints.maxWidth - frameSize) / 2,
+                    top: scanTop,
+                    child: Container(
+                      width: frameSize,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0x00D8C3FF),
+                            Color(0xFFD8C3FF),
+                            Color(0x00D8C3FF),
+                          ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFD8C3FF).withValues(alpha: 0.8),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              value: progress,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                Color(0xFFE7D9FF),
+                              ),
+                              backgroundColor: Colors.white24,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _t('qrReadingFromGallery'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _handleLiveDetection(BarcodeCapture capture) async {
@@ -732,13 +909,25 @@ class _QRScreenState extends State<QRScreen> {
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [Color(0xFF1E1F25), Color(0xFF1B1B22)],
+      gradient: LinearGradient(
+        colors: _isDarkMode
+            ? const [Color(0xFF1E1F25), Color(0xFF1B1B22)]
+            : const [Color(0xFFF8FAFF), Color(0xFFF1F5FF)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
       borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: const Color(0xFF393A44)),
+      border: Border.all(color: _outlineColor),
+      boxShadow: _isDarkMode
+          ? null
+          : const [
+              BoxShadow(
+                color: Color(0x1A4B8EDB),
+                blurRadius: 22,
+                spreadRadius: 1,
+                offset: Offset(0, 10),
+              ),
+            ],
     );
   }
 
@@ -755,9 +944,9 @@ class _QRScreenState extends State<QRScreen> {
               color: Color(0xFF1C1C22),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
+              color: _isDarkMode ? Colors.white : Colors.black87,
             ),
           ),
         ),
@@ -777,7 +966,7 @@ class _QRScreenState extends State<QRScreen> {
               const SizedBox(height: 2),
               Text(
                 AppStrings.get('toolsHeaderSubtitle', language),
-                style: const TextStyle(color: Colors.white60, fontSize: 16),
+                style: TextStyle(color: _mutedTextColor, fontSize: 16),
               ),
             ],
           ),
@@ -795,9 +984,9 @@ class _QRScreenState extends State<QRScreen> {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFF22232A),
+        color: _isDarkMode ? const Color(0xFF22232A) : const Color(0xFFF3F6FF),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFF333542)),
+        border: Border.all(color: _outlineColor),
       ),
       child: Row(
         children: List.generate(tabs.length, (index) {
@@ -823,7 +1012,9 @@ class _QRScreenState extends State<QRScreen> {
                   children: [
                     Icon(
                       tabs[index].$2,
-                      color: selected ? Colors.white : Colors.white54,
+                      color: selected
+                          ? Colors.white
+                          : (_isDarkMode ? Colors.white54 : Colors.black54),
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -832,7 +1023,9 @@ class _QRScreenState extends State<QRScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: selected ? Colors.white : Colors.white60,
+                        color: selected
+                            ? Colors.white
+                            : (_isDarkMode ? Colors.white60 : Colors.black54),
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
@@ -867,17 +1060,25 @@ class _QRScreenState extends State<QRScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF23242C),
+                  color: _panelFillColor,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: TextField(
                   controller: _urlController,
-                  style: const TextStyle(fontSize: 17),
+                  style: TextStyle(
+                    fontSize: 17,
+                    color: _isDarkMode ? Colors.white : Colors.black87,
+                  ),
                   decoration: InputDecoration(
                     border: InputBorder.none,
-                    icon: const Icon(Icons.qr_code_rounded, color: Colors.white54),
+                    icon: Icon(
+                      Icons.qr_code_rounded,
+                      color: _isDarkMode ? Colors.white54 : Colors.black54,
+                    ),
                     hintText: _t('enterText'),
-                    hintStyle: const TextStyle(color: Colors.white54),
+                    hintStyle: TextStyle(
+                      color: _isDarkMode ? Colors.white54 : Colors.black45,
+                    ),
                   ),
                   onChanged: provider.setUrl,
                 ),
@@ -898,36 +1099,16 @@ class _QRScreenState extends State<QRScreen> {
                     icon: const Icon(Icons.bolt_rounded, size: 16),
                     label: Text(e.$1),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white24),
-                      backgroundColor: const Color(0xFF2A2B35),
+                      foregroundColor:
+                          _isDarkMode ? Colors.white : Colors.black87,
+                      side: BorderSide(color: _outlineColor),
+                      backgroundColor: _chipBgColor,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
                       ),
                     ),
                   );
                 }).toList(),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(_t('qrAdvancedContentComingSoon'))),
-                    );
-                  },
-                  icon: const Icon(Icons.auto_awesome_rounded),
-                  label: Text(_t('qrAdvancedContentBuilder')),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFCAB8FF),
-                    side: const BorderSide(color: Colors.white30),
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                  ),
-                ),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -980,8 +1161,9 @@ class _QRScreenState extends State<QRScreen> {
                       icon: const Icon(Icons.copy_all_rounded),
                       label: Text(_t('qrCopyContent')),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
+                        foregroundColor:
+                            _isDarkMode ? Colors.white : Colors.black87,
+                        side: BorderSide(color: _outlineColor),
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -999,8 +1181,9 @@ class _QRScreenState extends State<QRScreen> {
                       icon: const Icon(Icons.clear_rounded),
                       label: Text(_t('qrClearInput')),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
+                        foregroundColor:
+                            _isDarkMode ? Colors.white : Colors.black87,
+                        side: BorderSide(color: _outlineColor),
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -1028,7 +1211,7 @@ class _QRScreenState extends State<QRScreen> {
               const SizedBox(height: 10),
               Text(
                 _t('qrStylePresets'),
-                style: const TextStyle(fontSize: 14, color: Colors.white70),
+                style: TextStyle(fontSize: 14, color: _subtleTextColor),
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -1042,14 +1225,14 @@ class _QRScreenState extends State<QRScreen> {
                     labelStyle: TextStyle(
                       color: _selectedQrStyle == style
                           ? Colors.white
-                          : Colors.white70,
+                          : _subtleTextColor,
                     ),
                     selectedColor: const Color(0xFF6D7BFF),
-                    backgroundColor: const Color(0xFF2A2B35),
+                    backgroundColor: _chipBgColor,
                     side: BorderSide(
                       color: _selectedQrStyle == style
                           ? const Color(0xFFD1BFFF)
-                          : Colors.white24,
+                          : _outlineColor,
                     ),
                   );
                 }).toList(),
@@ -1057,26 +1240,26 @@ class _QRScreenState extends State<QRScreen> {
               const SizedBox(height: 14),
               Text(
                 _t('qrErrorCorrectionLevel'),
-                style: const TextStyle(fontSize: 14, color: Colors.white70),
+                style: TextStyle(fontSize: 14, color: _subtleTextColor),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF23242C),
+                  color: _panelFillColor,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: _errorLevel,
                     isExpanded: true,
-                    dropdownColor: const Color(0xFF23242C),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    dropdownColor: _panelFillColor,
+                    style: TextStyle(
+                      color: _isDarkMode ? Colors.white : Colors.black87,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
-                    iconEnabledColor: Colors.white70,
+                    iconEnabledColor: _subtleTextColor,
                     items: const [
                       DropdownMenuItem(
                         value: QrErrorCorrectLevel.L,
@@ -1105,7 +1288,7 @@ class _QRScreenState extends State<QRScreen> {
               const SizedBox(height: 12),
               Text(
                 '${_t('qrSizeLabel')}: ${_qrSize.toStringAsFixed(0)} px',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
               Slider(
                 value: _qrSize,
@@ -1115,7 +1298,7 @@ class _QRScreenState extends State<QRScreen> {
               ),
               Text(
                 '${_t('qrInnerSpacingLabel')}: ${_innerSpacing.toStringAsFixed(0)} px',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
               Slider(
                 value: _innerSpacing,
@@ -1125,7 +1308,7 @@ class _QRScreenState extends State<QRScreen> {
               ),
               Text(
                 '${_t('qrCornerRadiusLabel')}: ${_borderRadius.toStringAsFixed(0)} px',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
               Slider(
                 value: _borderRadius,
@@ -1135,7 +1318,7 @@ class _QRScreenState extends State<QRScreen> {
               ),
               Text(
                 '${_t('qrBorderThicknessLabel')}: ${_borderThickness.toStringAsFixed(1)} px',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
               Slider(
                 value: _borderThickness,
@@ -1145,7 +1328,7 @@ class _QRScreenState extends State<QRScreen> {
               ),
               Text(
                 '${_t('qrBorderShadowLabel')}: ${_borderShadow.toStringAsFixed(0)}',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
               Slider(
                 value: _borderShadow,
@@ -1213,7 +1396,7 @@ class _QRScreenState extends State<QRScreen> {
               ),
               Text(
                 '${_t('qrContentLength')}: ${provider.url.length} ${_t('qrCharacters')}',
-                style: const TextStyle(color: Colors.white60),
+                style: TextStyle(color: _mutedTextColor),
               ),
               const SizedBox(height: 10),
               Text(
@@ -1245,13 +1428,13 @@ class _QRScreenState extends State<QRScreen> {
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
                     _t('qrCenterImageHint'),
-                    style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    style: TextStyle(color: _mutedTextColor, fontSize: 12),
                   ),
                 ),
               const SizedBox(height: 10),
               Text(
                 '${_t('qrExportQuality')}: x${_exportQuality.toStringAsFixed(1)}',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
               Slider(
                 value: _exportQuality,
@@ -1261,7 +1444,7 @@ class _QRScreenState extends State<QRScreen> {
               ),
               Text(
                 '${_t('qrErrorCorrectionLevel')}: ${_errorLevelText(_errorLevel)}',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
             ],
           ),
@@ -1287,52 +1470,83 @@ class _QRScreenState extends State<QRScreen> {
                             width: _borderThickness,
                           )
                         : null,
-                    boxShadow: _borderShadow > 0
-                        ? [
-                            BoxShadow(
-                              color: _foregroundColor.withValues(alpha: 0.28),
-                              blurRadius: _borderShadow,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
+                    boxShadow: [
+                      if (!_isDarkMode)
+                        const BoxShadow(
+                          color: Color(0x264B8EDB),
+                          blurRadius: 18,
+                          spreadRadius: 0.8,
+                          offset: Offset(0, 8),
+                        ),
+                      if (_borderShadow > 0)
+                        BoxShadow(
+                          color: _foregroundColor.withValues(alpha: 0.28),
+                          blurRadius: _borderShadow,
+                          spreadRadius: 1,
+                        ),
+                    ],
                   ),
                   padding: EdgeInsets.all(_innerSpacing),
-                  child: provider.qrModel == null
-                      ? Center(
-                          child: Icon(
-                            Icons.qr_code_2,
-                            color: _foregroundColor.withValues(alpha: 0.25),
-                            size: 56,
-                          ),
-                        )
-                      : RepaintBoundary(
-                          key: _qrImageKey,
-                          child: QrImageView(
-                            data: provider.qrModel!.url,
-                            version: QrVersions.auto,
-                            size: _qrSize - (_innerSpacing * 2),
-                            backgroundColor: _backgroundColor,
-                            gapless: !_leaveModuleGap,
-                            errorCorrectionLevel: _errorLevel,
-                            eyeStyle: QrEyeStyle(
-                              color: _foregroundColor,
-                              eyeShape: _eyeCircle
-                                  ? QrEyeShape.circle
-                                  : QrEyeShape.square,
-                            ),
-                            dataModuleStyle: QrDataModuleStyle(
-                              color: _foregroundColor,
-                              dataModuleShape: _dataCircle
-                                  ? QrDataModuleShape.circle
-                                  : QrDataModuleShape.square,
-                            ),
-                            embeddedImage: _embeddedImageProvider(provider),
-                            embeddedImageStyle: const QrEmbeddedImageStyle(
-                              size: Size(42, 42),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (!_isDarkMode)
+                        IgnorePointer(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: Container(
+                              height: (_qrSize - (_innerSpacing * 2)) * 0.42,
+                              decoration: const BoxDecoration(
+                                gradient: RadialGradient(
+                                  center: Alignment(0, -0.85),
+                                  radius: 1.05,
+                                  colors: [
+                                    Color(0x55FFFFFF),
+                                    Color(0x00FFFFFF),
+                                  ],
+                                  stops: [0.0, 1.0],
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                      provider.qrModel == null
+                          ? Center(
+                              child: Icon(
+                                Icons.qr_code_2,
+                                color: _foregroundColor.withValues(alpha: 0.25),
+                                size: 56,
+                              ),
+                            )
+                          : RepaintBoundary(
+                              key: _qrImageKey,
+                              child: QrImageView(
+                                data: provider.qrModel!.url,
+                                version: QrVersions.auto,
+                                size: _qrSize - (_innerSpacing * 2),
+                                backgroundColor: _backgroundColor,
+                                gapless: !_leaveModuleGap,
+                                errorCorrectionLevel: _errorLevel,
+                                eyeStyle: QrEyeStyle(
+                                  color: _foregroundColor,
+                                  eyeShape: _eyeCircle
+                                      ? QrEyeShape.circle
+                                      : QrEyeShape.square,
+                                ),
+                                dataModuleStyle: QrDataModuleStyle(
+                                  color: _foregroundColor,
+                                  dataModuleShape: _dataCircle
+                                      ? QrDataModuleShape.circle
+                                      : QrDataModuleShape.square,
+                                ),
+                                embeddedImage: _embeddedImageProvider(provider),
+                                embeddedImageStyle: const QrEmbeddedImageStyle(
+                                  size: Size(42, 42),
+                                ),
+                              ),
+                            ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1357,7 +1571,7 @@ class _QRScreenState extends State<QRScreen> {
                           border: Border.all(
                             color: _foregroundColor == c
                                 ? const Color(0xFFD1BFFF)
-                                : Colors.white30,
+                                : _outlineColor,
                             width: _foregroundColor == c ? 3 : 1.5,
                           ),
                         ),
@@ -1394,7 +1608,7 @@ class _QRScreenState extends State<QRScreen> {
                           border: Border.all(
                             color: _backgroundColor == c
                                 ? const Color(0xFFD1BFFF)
-                                : Colors.white30,
+                                : _outlineColor,
                             width: _backgroundColor == c ? 3 : 1.5,
                           ),
                         ),
@@ -1414,7 +1628,7 @@ class _QRScreenState extends State<QRScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A2B35),
+                  color: _chipBgColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1437,8 +1651,8 @@ class _QRScreenState extends State<QRScreen> {
                 icon: const Icon(Icons.share_outlined),
                 label: Text(AppStrings.get('shareQR', language)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white38),
+                  foregroundColor: _isDarkMode ? Colors.white : Colors.black87,
+                  side: BorderSide(color: _outlineColor),
                   minimumSize: const Size.fromHeight(54),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(28),
@@ -1453,8 +1667,8 @@ class _QRScreenState extends State<QRScreen> {
                 icon: const Icon(Icons.download_rounded),
                 label: Text(AppStrings.get('saveQR', language)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white38),
+                  foregroundColor: _isDarkMode ? Colors.white : Colors.black87,
+                  side: BorderSide(color: _outlineColor),
                   minimumSize: const Size.fromHeight(54),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(28),
@@ -1481,8 +1695,8 @@ class _QRScreenState extends State<QRScreen> {
             height: 360,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFF3A3B48)),
-              color: const Color(0xFF12131A),
+              border: Border.all(color: _outlineColor),
+              color: _isDarkMode ? const Color(0xFF12131A) : Colors.white,
             ),
             clipBehavior: Clip.antiAlias,
             child: Stack(
@@ -1517,6 +1731,10 @@ class _QRScreenState extends State<QRScreen> {
                     ),
                   ),
                 ),
+                if (_isGalleryScanInProgress)
+                  Positioned.fill(
+                    child: _buildGalleryScanOverlay(),
+                  ),
               ],
             ),
           ),
@@ -1529,7 +1747,7 @@ class _QRScreenState extends State<QRScreen> {
           Text(
             AppStrings.get('qrScannerSubtitle', language),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, color: Colors.white60),
+            style: TextStyle(fontSize: 15, color: _mutedTextColor),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -1540,8 +1758,8 @@ class _QRScreenState extends State<QRScreen> {
               icon: const Icon(Icons.photo_library_rounded),
               label: Text(AppStrings.get('scanFromGallery', language)),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white38),
+                foregroundColor: _isDarkMode ? Colors.white : Colors.black87,
+                side: BorderSide(color: _outlineColor),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -1555,14 +1773,14 @@ class _QRScreenState extends State<QRScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2B35),
+                color: _chipBgColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 '${_t('qrLastScanned')}: $_lastScannedValue',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: _subtleTextColor),
               ),
             ),
           ],
@@ -1582,7 +1800,9 @@ class _QRScreenState extends State<QRScreen> {
         return PopScope(
           canPop: true,
           child: Scaffold(
-            backgroundColor: const Color(0xFF09090C),
+            backgroundColor: _isDarkMode
+                ? const Color(0xFF09090C)
+                : const Color(0xFFF3F6FF),
             body: SafeArea(
               child: SingleChildScrollView(
                 child: Padding(

@@ -43,6 +43,64 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  Widget _routeWidget(String? name) {
+    switch (name) {
+      case '/splash':
+        return const SplashScreen();
+      case '/profile':
+        return const ProfileCreationScreen();
+      case '/profile-detail':
+        return const ProfileDetailScreen();
+      case '/':
+        return const HomeScreen();
+      case '/message':
+        return const MessageScreen();
+      case '/qr':
+        return const QRScreen();
+      case '/history':
+        return const SearchHistoryScreen();
+      case '/settings':
+        return const SettingsScreen();
+      default:
+        return const HomeScreen();
+    }
+  }
+
+  Route<dynamic> _buildRoute(RouteSettings settings, {required bool fast}) {
+    final page = _routeWidget(settings.name);
+
+    if (!fast) {
+      return MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => page,
+      );
+    }
+
+    return PageRouteBuilder<void>(
+      settings: settings,
+      transitionDuration: const Duration(milliseconds: 170),
+      reverseTransitionDuration: const Duration(milliseconds: 140),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.02, 0),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -68,25 +126,128 @@ class MyApp extends StatelessWidget {
 
           return MaterialApp(
             title: 'FastGokdeniz',
-            theme: AppTheme.lightTheme,
+            theme: themeProvider.isGlassMode
+                ? AppTheme.glassTheme
+                : AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: themeProvider.themeMode == 'dark'
-                ? ThemeMode.dark
-                : ThemeMode.light,
+            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            builder: (context, child) {
+              if (!themeProvider.isGlassMode || child == null) {
+                return child ?? const SizedBox.shrink();
+              }
+              return _GlassBackgroundShell(child: child);
+            },
             navigatorKey: NavigationService.navigatorKey,
             initialRoute: '/splash',
-            routes: {
-              '/splash': (context) => const SplashScreen(),
-              '/profile': (context) => const ProfileCreationScreen(),
-              '/profile-detail': (context) => const ProfileDetailScreen(),
-              '/': (context) => const HomeScreen(),
-              '/message': (context) => const MessageScreen(),
-              '/qr': (context) => const QRScreen(),
-              '/history': (context) => const SearchHistoryScreen(),
-              '/settings': (context) => const SettingsScreen(),
-            },
+            onGenerateRoute: (settings) => _buildRoute(
+              settings,
+              fast: themeProvider.isGlassMode,
+            ),
+            onUnknownRoute: (settings) => _buildRoute(
+              const RouteSettings(name: '/'),
+              fast: themeProvider.isGlassMode,
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _GlassBackgroundShell extends StatelessWidget {
+  const _GlassBackgroundShell({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const RepaintBoundary(child: _GlassBackdrop()),
+        child,
+      ],
+    );
+  }
+}
+
+class _GlassBackdrop extends StatelessWidget {
+  const _GlassBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF87D6E8), Color(0xFFA2C8F7), Color(0xFF9EDCF4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          const Positioned(
+            top: -40,
+            right: -30,
+            child: _GlassBlob(
+              size: 220,
+              color: Color(0x574F8EEB),
+            ),
+          ),
+          const Positioned(
+            bottom: -50,
+            left: -30,
+            child: _GlassBlob(
+              size: 260,
+              color: Color(0x4DA7F0FF),
+            ),
+          ),
+          const Positioned(
+            top: 180,
+            left: 30,
+            child: _GlassBlob(
+              size: 130,
+              color: Color(0x40FFFFFF),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlassBlob extends StatelessWidget {
+  const _GlassBlob({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.30),
+            color,
+            color.withValues(alpha: 0.06),
+          ],
+          stops: const [0.0, 0.62, 1.0],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.26)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.35),
+            blurRadius: 26,
+            spreadRadius: 2,
+          ),
+        ],
       ),
     );
   }

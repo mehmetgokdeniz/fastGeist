@@ -1,5 +1,4 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/scan_history.dart';
 import '../models/user_profile.dart';
 import '../models/saved_message.dart';
