@@ -1,6 +1,6 @@
-# FastGökdeniz
+# FastGeist
 
-`FastGökdeniz`, QR kod tarama, paylaşma ve yönlendirme özellikleri sunan gelişmiş bir Flutter mobil uygulamasıdır. Uygulama, Android ve iOS platformları için hazırdır, Firebase, yerel veritabanı, paylaşım, bildirim ve kapsamlı QR işleme özellikleri içerir.
+`FastGeist`, QR kod tarama, paylaşma ve yönlendirme özellikleri sunan gelişmiş bir Flutter mobil uygulamasıdır. Uygulama, Android ve iOS platformları için hazırdır, Firebase, yerel veritabanı, paylaşım, bildirim ve kapsamlı QR işleme özellikleri içerir.
 
 ## 🚀 Proje Hakkında
 
@@ -152,7 +152,7 @@ Sürüm bilgisi:
 
 ## 📣 v1.0.0.2 Güncelleme Notu
 
-GitHub deposu: https://github.com/mehmetgokdeniz/fastgokdeniz
+GitHub deposu: https://github.com/mehmetgokdeniz/fastgeist
 
 Bu sürümde QR tarayıcı tarafında kararlılık ve kullanım akışı iyileştirilmiştir:
 
